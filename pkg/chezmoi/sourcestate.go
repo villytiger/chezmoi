@@ -117,6 +117,7 @@ type SourceState struct {
 	templates               map[string]*Template
 	externals               map[RelPath]*External
 	ignoredRelPaths         map[RelPath]struct{}
+	renameRelPaths          *BiDiMap[RelPath]
 }
 
 // A SourceStateOption sets an option on a source state.
@@ -196,6 +197,13 @@ func WithPriorityTemplateData(priorityTemplateData map[string]any) SourceStateOp
 func WithReadTemplateData(readTemplateData bool) SourceStateOption {
 	return func(s *SourceState) {
 		s.readTemplateData = readTemplateData
+	}
+}
+
+// WithRenameRelPaths sets the renames.
+func WithRenameRelPaths(renameRelPaths *BiDiMap[RelPath]) SourceStateOption {
+	return func(s *SourceState) {
+		s.renameRelPaths = renameRelPaths
 	}
 }
 

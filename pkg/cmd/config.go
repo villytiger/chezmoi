@@ -1,5 +1,7 @@
 package cmd
 
+// FIXME use chezmoi.SourceRelPath in Config.Rename
+
 import (
 	"bufio"
 	"bytes"
@@ -86,6 +88,7 @@ type ConfigFile struct {
 	Pager              string                          `json:"pager" mapstructure:"pager" yaml:"pager"`
 	PINEntry           pinEntryConfig                  `json:"pinentry" mapstructure:"pinentry" yaml:"pinentry"`
 	Progress           bool                            `json:"progress" mapstructure:"progress" yaml:"progress"`
+	RenameStrs         map[string]string               `json:"rename" mapstructure:"rename" yaml:"rename"`
 	Safe               bool                            `json:"safe" mapstructure:"safe" yaml:"safe"`
 	ScriptEnv          map[string]string               `json:"scriptEnv" mapstructure:"scriptEnv" yaml:"scriptEnv"`
 	ScriptTempDir      chezmoi.AbsPath                 `json:"scriptTempDir" mapstructure:"scriptTempDir" yaml:"scriptTempDir"` //nolint:lll
@@ -192,6 +195,7 @@ type Config struct {
 	// Computed configuration.
 	homeDirAbsPath      chezmoi.AbsPath
 	encryption          chezmoi.Encryption
+	renameRelPaths      *chezmoi.BiDiMap[chezmoi.RelPath]
 	sourceDirAbsPath    chezmoi.AbsPath
 	sourceDirAbsPathErr error
 	sourceState         *chezmoi.SourceState
@@ -1502,6 +1506,7 @@ func (c *Config) newSourceState(
 		chezmoi.WithLogger(&sourceStateLogger),
 		chezmoi.WithMode(c.Mode),
 		chezmoi.WithPriorityTemplateData(c.Data),
+		chezmoi.WithRenameRelPaths(c.renameRelPaths),
 		chezmoi.WithSourceDir(c.SourceDirAbsPath),
 		chezmoi.WithSystem(c.sourceSystem),
 		chezmoi.WithTemplateFuncs(c.templateFuncs),
@@ -2047,10 +2052,21 @@ func (c *Config) newTemplateData() *templateData {
 func (c *Config) readConfig() error {
 	switch err := c.decodeConfigFile(c.configFileAbsPath, &c.ConfigFile); {
 	case errors.Is(err, fs.ErrNotExist):
-		return nil
+		// Do nothing.
 	default:
 		return err
 	}
+
+	c.renameRelPaths = chezmoi.NewBiDiMap[chezmoi.RelPath](len(c.RenameStrs))
+	for _, fromStr := range sortedKeys(c.RenameStrs) {
+		fromRelPath := chezmoi.NewRelPath(fromStr)
+		toRelPath := chezmoi.NewRelPath(c.RenameStrs[fromStr])
+		if !c.renameRelPaths.Insert(fromRelPath, toRelPath) {
+			return fmt.Errorf("%s to %s: duplicate rename", fromRelPath, toRelPath)
+		}
+	}
+
+	return nil
 }
 
 // run runs name with args in dir.
